@@ -1,0 +1,122 @@
+
+# Install necessary packages
+!pip install nltk newspaper3k
+
+# Import the required libraries
+from newspaper import Article
+import random
+import nltk
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import warnings
+import time
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Download the punkt package
+nltk.download('punkt', quiet=True)
+
+# Function to fetch and process the article
+def fetch_article(url):
+    article = Article(url)
+    try:
+        article.download()
+        article.parse()
+        article.nlp()
+        return article.text
+    except Exception as e:
+        print(f"Error fetching the article: {e}")
+        return ""
+
+# Get the article
+corpus = fetch_article('https://www.mayoclinic.org/diseases-conditions/chronic-kidney-disease/symptoms-causes/syc-20354521')
+
+# Print the article text
+print(corpus)
+
+# Tokenization
+sentence_list = nltk.sent_tokenize(corpus)
+print(sentence_list)
+
+# Function to return a random greeting response to a user greeting
+def greeting_response(text):
+    text = text.lower()
+    bot_greetings = ['howdy', 'hi', 'hey', 'hello', 'hola']
+    user_greetings = ['hi', 'hey', 'hello', 'hola', 'greetings', 'wassup']
+    for word in text.split():
+        if word in user_greetings:
+            return random.choice(bot_greetings)
+    return None
+
+# Function to sort indices based on similarity scores
+def index_sort(list_var):
+    length = len(list_var)
+    list_index = list(range(0, length))
+    x = list_var
+    for i in range(length):
+        for j in range(length):
+            if x[list_index[i]] > x[list_index[j]]:
+                list_index[i], list_index[j] = list_index[j], list_index[i]
+    return list_index
+
+# Function to generate bot response
+def bot_response(user_input):
+    user_input = user_input.lower()
+    sentence_list.append(user_input)
+    bot_response = ''
+    cm = CountVectorizer().fit_transform(sentence_list)
+    similarity_scores = cosine_similarity(cm[-1], cm)
+    similarity_scores_list = similarity_scores.flatten()
+    index = index_sort(similarity_scores_list)
+    index = index[1:]
+    response_flag = 0
+
+    j = 0
+    for i in range(len(index)):
+        if similarity_scores_list[index[i]] > 0.0:
+            bot_response += ' ' + sentence_list[index[i]]
+            response_flag = 1
+            j += 1
+        if j > 2:
+            break
+    if response_flag == 0:
+        bot_response += " I apologize, I don't understand."
+
+    sentence_list.remove(user_input)
+    return bot_response
+
+# Start the chat and measure KPIs
+print('Doc Bot: I am Doctor Bot or Doc Bot for short. I will answer your queries about Chronic Kidney Disease. If you want to exit, type Bye.')
+
+exit_list = ['exit', 'see you later', 'bye', 'quit']
+response_times = []
+error_count = 0
+total_responses = 0
+
+while True:
+    user_input = input()
+    start_time = time.time()
+    if user_input.lower() in exit_list:
+        print('Doc Bot: Chat with you later!')
+        break
+    else:
+        if greeting_response(user_input) is not None:
+            response = greeting_response(user_input)
+            print('Doc Bot: ' + response)
+        else:
+            response = bot_response(user_input)
+            print('Doc Bot: ' + response)
+            if "I apologize" in response:
+                error_count += 1
+        end_time = time.time()
+        response_times.append(end_time - start_time)
+        total_responses += 1
+
+# Calculate and print KPIs
+average_response_time = np.mean(response_times)
+error_rate = error_count / total_responses
+
+print(f"Average Response Time: {(average_response_time * 1000):.2f} milliseconds")
+print(f"Error Rate: {error_rate:.2%}")
